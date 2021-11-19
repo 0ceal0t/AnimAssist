@@ -40,9 +40,7 @@ inline std::string convert_from_wstring(const std::wstring &wstr)
     return conv.to_bytes(wstr);
 }
 
-// animassist.exe (1) in_skl_hkx out_skl_xml
-// animassist.exe (2) in_edited_hk_xml out_anim_hkx
-// animassist.exe (3) in_skl_hkx in_anim_hkx anim_index out_merged_hkx
+// animassist.exe base_hkx base_hkx_anim_index new_hkx hex_hkx_anim_index output
 int main(int argc, const char** argv) {
 
     int nargc = 0;
@@ -61,35 +59,25 @@ int main(int argc, const char** argv) {
         return 1;
     }
 
-    hkStringBuf skl_hkt;
-    hkStringBuf anim_hkt;
-    int anim_index;
-    std::string outw;
+    hkStringBuf anim_hkt_1;
+    int anim_index_1;
+    hkStringBuf anim_hkt_2;
+    int anim_index_2;
     hkStringBuf out;
-    hkRootLevelContainer* skl_root_container;
-    hkRootLevelContainer* anim_root_container;
+    hkRootLevelContainer* anim_root_container_1;
+    hkRootLevelContainer* anim_root_container_2;
 
-    // 1 = skl -> out tagfile
-    // 2 = xml packfile of skl and anim -> binary tagfile
-    // 3 = skl + anim -> out hk*
-    int mode = _wtoi(nargv[1]);
-    skl_hkt = convert_from_wstring(nargv[2]).c_str();
-    if (mode == 1 || mode == 2) {
-        out = convert_from_wstring(nargv[3]).c_str();
-    }
-    if (mode == 3) {
-        anim_hkt = convert_from_wstring(nargv[3]).c_str();
-        anim_index = _wtoi(nargv[4]);
-        out = convert_from_wstring(nargv[5]).c_str();
-    }
+    anim_hkt_1 = convert_from_wstring(nargv[1]).c_str();
+    anim_index_1 = _wtoi(nargv[2]);
+    anim_hkt_2 = convert_from_wstring(nargv[3]).c_str();
+    anim_index_2 = _wtoi(nargv[4]);
+    out = convert_from_wstring(nargv[5]).c_str();
 
-    printf("Mode is %d\n", mode);
     init();
     auto loader = new hkLoader();
 
-    skl_root_container = loader->load(skl_hkt);
-    if (mode == 3)
-        anim_root_container = loader->load(anim_hkt);
+    anim_root_container_1 = loader->load(anim_hkt_1);
+    anim_root_container_2 = loader->load(anim_hkt_2);
 
     hkOstream stream(out);
     hkPackfileWriter::Options packOptions;
@@ -99,30 +87,24 @@ int main(int argc, const char** argv) {
     layoutRules.m_bytesInPointer = 8;
     packOptions.m_layout = layoutRules;
 
-    auto* skl_container = reinterpret_cast<hkaAnimationContainer*>(skl_root_container->findObjectByType(hkaAnimationContainerClass.getName()));
-
     hkResult res;
-    if (mode == 1) {
-        res = hkSerializeDeprecated::getInstance().saveXmlPackfile(skl_root_container, hkRootLevelContainer::staticClass(), stream.getStreamWriter(), packOptions, nullptr, &errOut);
-    } else if (mode == 2) {
-        skl_container->m_skeletons.clear();
-        res = hkSerializeUtil::saveTagfile(skl_root_container, hkRootLevelContainer::staticClass(), stream.getStreamWriter(), nullptr, hkSerializeUtil::SAVE_DEFAULT);
-    } else if (mode == 3) {
-        auto anim_container = reinterpret_cast<hkaAnimationContainer*>(anim_root_container->findObjectByType(hkaAnimationContainerClass.getName()));
-        auto anim_ptr = anim_container->m_animations[anim_index];
-        auto binding_ptr = anim_container->m_bindings[0];
-        auto anim_ref = hkRefPtr<hkaAnimation>(anim_ptr);
-        auto binding_ref = hkRefPtr<hkaAnimationBinding>(binding_ptr);
-        skl_container->m_animations.append(&anim_ref, 1);
-        skl_container->m_bindings.append(&binding_ref, 1);
-        res = hkSerializeUtil::savePackfile(skl_root_container, hkRootLevelContainer::staticClass(), stream.getStreamWriter(), packOptions, nullptr, hkSerializeUtil::SAVE_DEFAULT);
-    }
+    auto anim_container_1 = reinterpret_cast<hkaAnimationContainer*>(anim_root_container_1->findObjectByType(hkaAnimationContainerClass.getName()));
+
+    auto anim_container_2 = reinterpret_cast<hkaAnimationContainer*>(anim_root_container_2->findObjectByType(hkaAnimationContainerClass.getName()));
+    auto anim_ptr_2 = anim_container_2->m_animations[anim_index_2];
+    auto binding_ptr_2 = anim_container_2->m_bindings[anim_index_2];
+
+    anim_container_1->m_animations[anim_index_1] = anim_ptr_2; // replace hkx_1 animation with that of hkx_2
+    anim_container_1->m_bindings[anim_index_1] = binding_ptr_2;
+
+    //res = hkSerializeUtil::savePackfile(anim_root_container_1, hkRootLevelContainer::staticClass(), stream.getStreamWriter(), packOptions, nullptr, hkSerializeUtil::SAVE_DEFAULT);
+    res = hkSerializeUtil::saveTagfile(anim_root_container_1, hkRootLevelContainer::staticClass(), stream.getStreamWriter(), nullptr, hkSerializeUtil::SAVE_DEFAULT);
 
     if (res.isSuccess()) {
         // I had some cleanup here. And then Havok decided to access violate every time.
         return 0;
     } else {
-        std::cout << "\n\nAn error occurred while saving the XML...\n";
+        std::cout << "\n\nAn error occurred while saving the HKX...\n";
         return 1;
     }
 }
