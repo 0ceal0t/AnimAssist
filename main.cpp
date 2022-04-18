@@ -40,7 +40,7 @@ inline std::string convert_from_wstring(const std::wstring &wstr)
     return conv.to_bytes(wstr);
 }
 
-// animassist.exe base_hkx base_hkx_anim_index new_hkx hex_hkx_anim_index output
+// animassist.exe mode base_hkx base_hkx_anim_index new_hkx hex_hkx_anim_index output
 int main(int argc, const char** argv) {
 
     int nargc = 0;
@@ -59,19 +59,24 @@ int main(int argc, const char** argv) {
         return 1;
     }
 
+    int mode;
+
     hkStringBuf anim_hkt_1;
     int anim_index_1;
+
     hkStringBuf anim_hkt_2;
     int anim_index_2;
+
     hkStringBuf out;
     hkRootLevelContainer* anim_root_container_1;
     hkRootLevelContainer* anim_root_container_2;
 
-    anim_hkt_1 = convert_from_wstring(nargv[1]).c_str();
-    anim_index_1 = _wtoi(nargv[2]);
-    anim_hkt_2 = convert_from_wstring(nargv[3]).c_str();
-    anim_index_2 = _wtoi(nargv[4]);
-    out = convert_from_wstring(nargv[5]).c_str();
+    mode = _wtoi(nargv[1]);
+    anim_hkt_1 = convert_from_wstring(nargv[2]).c_str();
+    anim_index_1 = _wtoi(nargv[3]);
+    anim_hkt_2 = convert_from_wstring(nargv[4]).c_str();
+    anim_index_2 = _wtoi(nargv[5]);
+    out = convert_from_wstring(nargv[6]).c_str();
 
     init();
     auto loader = new hkLoader();
@@ -81,24 +86,30 @@ int main(int argc, const char** argv) {
 
     hkOstream stream(out);
     hkPackfileWriter::Options packOptions;
-    hkSerializeUtil::ErrorDetails errOut;
 
-    auto layoutRules = hkStructureLayout::HostLayoutRules;
-    layoutRules.m_bytesInPointer = 8;
-    packOptions.m_layout = layoutRules;
-
-    hkResult res;
     auto anim_container_1 = reinterpret_cast<hkaAnimationContainer*>(anim_root_container_1->findObjectByType(hkaAnimationContainerClass.getName()));
-
     auto anim_container_2 = reinterpret_cast<hkaAnimationContainer*>(anim_root_container_2->findObjectByType(hkaAnimationContainerClass.getName()));
-    auto anim_ptr_2 = anim_container_2->m_animations[anim_index_2];
-    auto binding_ptr_2 = anim_container_2->m_bindings[anim_index_2];
 
-    anim_container_1->m_animations[anim_index_1] = anim_ptr_2; // replace hkx_1 animation with that of hkx_2
-    anim_container_1->m_bindings[anim_index_1] = binding_ptr_2;
+    if (mode == 1) { // replace
+        auto anim_ptr_2 = anim_container_2->m_animations[anim_index_2];
+        auto binding_ptr_2 = anim_container_2->m_bindings[anim_index_2];
 
-    //res = hkSerializeUtil::savePackfile(anim_root_container_1, hkRootLevelContainer::staticClass(), stream.getStreamWriter(), packOptions, nullptr, hkSerializeUtil::SAVE_DEFAULT);
-    res = hkSerializeUtil::saveTagfile(anim_root_container_1, hkRootLevelContainer::staticClass(), stream.getStreamWriter(), nullptr, hkSerializeUtil::SAVE_DEFAULT);
+        anim_container_1->m_animations[anim_index_1] = anim_ptr_2; // replace hkx_1 animation with that of hkx_2
+        anim_container_1->m_bindings[anim_index_1] = binding_ptr_2;
+    }
+    else if (mode == 2) { // remove
+        anim_container_1->m_animations.removeAt(anim_index_1);
+        anim_container_1->m_bindings.removeAt(anim_index_1);
+    }
+    else if (mode == 3) { // add
+        auto anim_ptr_2 = anim_container_2->m_animations[anim_index_2];
+        auto binding_ptr_2 = anim_container_2->m_bindings[anim_index_2];
+
+        anim_container_1->m_animations.pushBack(anim_ptr_2);
+        anim_container_1->m_bindings.pushBack(binding_ptr_2);
+    }
+
+    hkResult res = hkSerializeUtil::saveTagfile(anim_root_container_1, hkRootLevelContainer::staticClass(), stream.getStreamWriter(), nullptr, hkSerializeUtil::SAVE_DEFAULT);
 
     if (res.isSuccess()) {
         // I had some cleanup here. And then Havok decided to access violate every time.
