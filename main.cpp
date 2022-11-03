@@ -1,6 +1,7 @@
-
 #include <iostream>
 #include <cstdio>
+#include <vector>
+#include <fstream>
 
 #include <Common/Base/hkBase.h>
 #include <Common/Base/Memory/System/Util/hkMemoryInitUtil.h>
@@ -19,6 +20,8 @@
 #include <codecvt>
 
 #include "Common/Base/System/Init/PlatformInit.cxx"
+
+using namespace std;
 
 static void HK_CALL errorReport(const char* msg, void* userContext)
 {
@@ -71,6 +74,7 @@ int main(int argc, const char** argv) {
     hkRootLevelContainer* anim_root_container_1;
     hkRootLevelContainer* anim_root_container_2;
 
+    // kind of jank but whatever
     mode = _wtoi(nargv[1]);
     anim_hkt_1 = convert_from_wstring(nargv[2]).c_str();
     anim_index_1 = _wtoi(nargv[3]);
@@ -107,6 +111,69 @@ int main(int argc, const char** argv) {
 
         anim_container_1->m_animations.pushBack(anim_ptr_2);
         anim_container_1->m_bindings.pushBack(binding_ptr_2);
+    }
+    else if (mode == 4) { // output
+        // 4 pap_hkx pap_idx skl_hkx not_used bin_out
+
+        // out = .bin output
+        // anim_container_2 is the skeleton
+        auto skl_container = anim_container_2;
+        auto skl = skl_container->m_skeletons[0];
+
+        auto num_bones = skl->m_bones.getSize();
+        stream.write((char*)&num_bones, 4); // write number of bones
+
+        for(int i = 0; i < num_bones; i++) {
+            auto bone_parent = skl->m_parentIndices[i];
+            stream.write((char*)&bone_parent, 2); // write bone parents
+        }
+
+        for(int i = 0; i < num_bones; i++) {
+            auto bone_ref = skl->m_referencePose[i];
+
+            auto translation = bone_ref.m_translation;
+            auto rotation = bone_ref.m_rotation;
+            auto scale = bone_ref.m_scale;
+
+            stream.write((char*)&translation, sizeof(hkVector4f));
+            stream.write((char*)&rotation, sizeof(hkQuaternionf));
+            stream.write((char*)&scale, sizeof(hkVector4f));
+        }
+
+        auto anim = anim_container_1->m_animations[anim_index_1];
+        auto binding = anim_container_1->m_bindings[anim_index_1];
+
+        auto num_tracks = binding->m_transformTrackToBoneIndices.getSize();
+        stream.write((char*)&num_tracks, 4); // write number of tracks
+
+        for(int i = 0; i < num_tracks; i++) {
+            auto track_bone = binding->m_transformTrackToBoneIndices[i];
+            stream.write((char*)&track_bone, 2); // write track bone
+        }
+
+        auto num_frames = anim->getNumOriginalFrames();
+        stream.write((char*)&num_frames, 4); // write number of frames
+        auto duration = anim->m_duration;
+        auto frame_time = duration / (float)num_frames;
+
+        for(int i = 0; i < num_tracks; i++) {
+            for(int j = 0; j < num_frames; j++ ) {
+                hkQsTransform transformOut;
+                anim->sampleSingleTransformTrack(frame_time * j, i, &transformOut);
+
+                auto translation = transformOut.m_translation;
+                auto rotation = transformOut.m_rotation;
+                auto scale = transformOut.m_scale;
+
+                stream.write((char*)&translation, sizeof(hkVector4f));
+                stream.write((char*)&rotation, sizeof(hkQuaternionf));
+                stream.write((char*)&scale, sizeof(hkVector4f));
+            }
+        }
+
+        return 1; // don't output packfile
+
+        // stream.read(&translation, sizeof(hkVector4));
     }
 
     hkResult res = hkSerializeUtil::saveTagfile(anim_root_container_1, hkRootLevelContainer::staticClass(), stream.getStreamWriter(), nullptr, hkSerializeUtil::SAVE_DEFAULT);
