@@ -126,6 +126,8 @@ int main(int argc, const char** argv) {
         for(int i = 0; i < num_bones; i++) {
             auto bone_parent = skl->m_parentIndices[i];
             stream.write((char*)&bone_parent, 2); // write bone parents
+            std::cout << i;
+            std::cout << "\n";
         }
 
         for(int i = 0; i < num_bones; i++) {
@@ -135,9 +137,11 @@ int main(int argc, const char** argv) {
             auto rotation = bone_ref.m_rotation;
             auto scale = bone_ref.m_scale;
 
-            stream.write((char*)&translation, sizeof(hkVector4f));
-            stream.write((char*)&rotation, sizeof(hkQuaternionf));
-            stream.write((char*)&scale, sizeof(hkVector4f));
+            stream.write((char*)&translation, 16);
+            stream.write((char*)&rotation, 16);
+            stream.write((char*)&scale, 16);
+            std::cout << i;
+            std::cout << "\n";
         }
 
         auto anim = anim_container_1->m_animations[anim_index_1];
@@ -156,24 +160,52 @@ int main(int argc, const char** argv) {
         auto duration = anim->m_duration;
         auto frame_time = duration / (float)num_frames;
 
-        for(int i = 0; i < num_tracks; i++) {
-            for(int j = 0; j < num_frames; j++ ) {
-                hkQsTransform transformOut;
-                anim->sampleSingleTransformTrack(frame_time * j, i, &transformOut);
+        auto num_tracks_2 = anim->m_numberOfTransformTracks;
+        std::cout << num_tracks_2;
+        std::cout << num_tracks;
+        std::cout << "-----------------\n";
+
+        hkLocalArray<hkQsTransform> trackSample(num_tracks_2);
+        trackSample.setSizeUnchecked(num_tracks_2);
+
+        for(int j = 0; j < num_frames; j++ ) {
+            float time = frame_time * j;
+
+            anim->sampleTracks( hkReal(time), trackSample.begin(), HK_NULL );
+
+            for(int i = 0; i < num_tracks_2; i++) {
+                auto transformOut = trackSample[i];
 
                 auto translation = transformOut.m_translation;
                 auto rotation = transformOut.m_rotation;
                 auto scale = transformOut.m_scale;
 
-                stream.write((char*)&translation, sizeof(hkVector4f));
-                stream.write((char*)&rotation, sizeof(hkQuaternionf));
-                stream.write((char*)&scale, sizeof(hkVector4f));
+                stream.write((char*)&translation, 16);
+                stream.write((char*)&rotation, 16);
+                stream.write((char*)&scale, 16);
             }
         }
 
-        return 1; // don't output packfile
+        /*for(int i = 0; i < num_tracks; i++) {
+            std::cout << i;
+            std::cout << "-----------------\n";
 
-        // stream.read(&translation, sizeof(hkVector4));
+            for(int j = 0; j < num_frames; j++ ) {
+                hkQsTransform transformOut;
+
+                anim->sampleSingleTransformTrack(0.1f, 1, &transformOut);
+
+                //auto translation = transformOut.m_translation;
+                //auto rotation = transformOut.m_rotation;
+                //auto scale = transformOut.m_scale;
+
+                //stream.write((char*)&translation, 16);
+                //stream.write((char*)&rotation, 16);
+                //stream.write((char*)&scale, 16);
+            }
+        }*/
+
+        return 1; // don't output packfile
     }
 
     hkResult res = hkSerializeUtil::saveTagfile(anim_root_container_1, hkRootLevelContainer::staticClass(), stream.getStreamWriter(), nullptr, hkSerializeUtil::SAVE_DEFAULT);
