@@ -95,11 +95,44 @@ int main(int argc, const char** argv) {
     auto anim_container_2 = reinterpret_cast<hkaAnimationContainer*>(anim_root_container_2->findObjectByType(hkaAnimationContainerClass.getName()));
 
     if (mode == 1) { // replace
-        auto anim_ptr_2 = anim_container_2->m_animations[anim_index_2];
-        auto binding_ptr_2 = anim_container_2->m_bindings[anim_index_2];
+        //auto anim_ptr_2 = anim_container_2->m_animations[anim_index_2];
+        //auto binding_ptr_2 = anim_container_2->m_bindings[anim_index_2];
 
-        anim_container_1->m_animations[anim_index_1] = anim_ptr_2; // replace hkx_1 animation with that of hkx_2
-        anim_container_1->m_bindings[anim_index_1] = binding_ptr_2;
+        //anim_container_1->m_animations[anim_index_1] = anim_ptr_2; // replace hkx_1 animation with that of hkx_2
+        //anim_container_1->m_bindings[anim_index_1] = binding_ptr_2;
+
+        // From XAT
+
+        hkaAnimation* sourceAnim = anim_container_2->m_animations[anim_index_2];
+        hkaAnimation* targetAnimation = anim_container_1->m_animations[anim_index_1];
+
+        hkaAnimationBinding* sourceBinding = nullptr;
+        for (auto& currentBinding : anim_container_2->m_bindings) {
+            if (currentBinding->m_animation == sourceAnim) {
+                sourceBinding = currentBinding;
+            }
+        }
+
+        anim_container_1->m_animations[anim_index_1] = sourceAnim;
+
+        int targetBindingIndex = -1;
+
+        if (sourceBinding) {
+            for (int i = anim_container_1->m_bindings.getSize() - 1; i >= 0; --i) {
+                hkaAnimationBinding* binding = anim_container_1->m_bindings[i];
+                if (binding->m_animation == targetAnimation) {
+                    targetBindingIndex = i;
+                }
+            }
+
+            if (targetBindingIndex == -1) {
+                anim_container_1->m_bindings.pushBack(sourceBinding);
+                targetBindingIndex = anim_container_1->m_bindings.getSize();
+            }
+            else {
+                anim_container_1->m_bindings[targetBindingIndex] = sourceBinding;
+            }
+        }
     }
     else if (mode == 2) { // remove
         anim_container_1->m_animations.removeAt(anim_index_1);
